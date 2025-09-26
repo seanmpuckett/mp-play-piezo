@@ -55,7 +55,7 @@ Music sequences are defined as strings with the following commands:
 ### Hardware Setup
 Call once at startup:
 ```python
-setup(pin, timerid, interruptrate=120)
+setup(pin, timerid)
 ```
 - `pin`: GPIO pin number for PWM output  
 - `timerid`: ID of hardware timer to use for interrupts  
