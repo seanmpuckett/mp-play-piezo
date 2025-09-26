@@ -1,5 +1,4 @@
 
-
 # piezo player library for micropython
 # 2025 Shea M Puckett
 # Apache 2.0 License e.g. you're on your own
@@ -7,64 +6,50 @@
 from machine import Pin,PWM,Timer
 import array
 
+
 buf_play = array.array('H',bytearray(32))
 BUF_POS = const(0)
 BUF_TOP = const(1)
 PLAYING = const(2)
-COUNTDOWN = const(3)
-NOTE_OFF = const(4)
-DATA_START = const(5)
+NOTE_OFF = const(3)
+DATA_START = const(4)
 
-intrate = 120
 pwm = None
 timer = None
 
-def setup(pin, timerid, interruptrate = 120):
-    global pwm, timer, intrate
-    intrate = interruptrate
+def setup(pin, timerid):
+    global pwm, timer
     timer = Timer(timerid)
     pwm = PWM(Pin(pin,Pin.OUT))
     pwm.duty_u16(0)
     pwm.deinit()
     pwm.init()
     pwm.duty_u16(0)
-    
   
 def play(seq): 
     if stop(): return
-    buf_play[BUF_TOP] = _parse(seq)
-    if buf_play[BUF_TOP]:
-      buf_play[BUF_POS] = DATA_START 
-      buf_play[COUNTDOWN] = 0
-      buf_play[PLAYING] = 1   
-      pwm.duty_u16(0)
-      pwm.freq(10000)
-      timer.init(period = 1000 // intrate,mode = Timer.PERIODIC,callback = _handler)
+    if count := _parse(seq):
+        buf_play[BUF_TOP] = count
+        buf_play[BUF_POS] = DATA_START 
+        buf_play[PLAYING] = 1   
+        _handler(None)
 
 def stop():
-    if pwm == None: return 1
+    if pwm is None: return 1
     timer.deinit()
-    if buf_play[PLAYING]: 
-      pwm.duty_u16(0)
+    if buf_play[PLAYING]: pwm.duty_u16(0)
     buf_play[PLAYING] = 0
-    buf_play[COUNTDOWN] = 0
-    
+
 def isplaying():
     return buf_play[PLAYING]
- 
  
 ### internals
  
 @micropython.viper
 def _handler(junk):
     _buf = ptr16(buf_play)
-
+  
     if not _buf[PLAYING]: stop(); return
-
-    c = _buf[COUNTDOWN] = _buf[COUNTDOWN] - 1
-    if c == _buf[NOTE_OFF]: pwm.duty_u16(0)
-    if c < 0x8000: return
-
     pos = _buf[BUF_POS]
     if pos >= _buf[BUF_TOP]: stop(); return
 
@@ -73,18 +58,34 @@ def _handler(junk):
 
     duty = 256 << ((f >> 13) & 7)
     f &= 0x1FFF
-    if f == 0:           # rest
+
+    if f == 0:            # rest
         pwm.duty_u16(0)
-    elif f == 1:         # click
+    elif f == 1:          # click
         pwm.duty_u16(65535)
-    else:                # tone
+    else:                 # tone
         pwm.duty_u16(duty)
         pwm.freq(f)
 
-    duration = d & 0x1FFF
-    _buf[NOTE_OFF]   = (duration * (d >> 13)) >> 3
-    _buf[COUNTDOWN]  = duration
-    _buf[BUF_POS]    = pos + 2
+    duration   = d & 0x1FFF
+    note_off   = ((duration * (d >> 13)) >> 3) if f else 0
+    _buf[BUF_POS]  = pos + 2
+
+    if note_off:
+      _buf[NOTE_OFF] = note_off
+      timer.init(period=duration - note_off, mode=Timer.ONE_SHOT, callback=_noteoff)
+    else:
+      timer.init(period=duration, mode=Timer.ONE_SHOT, callback=_handler)
+
+
+def _noteoff(junk):
+    pwm.duty_u16(0)
+    timer.init(period=buf_play[NOTE_OFF], mode=Timer.ONE_SHOT, callback=_handler)
+    
+
+
+
+
     
 notes = "C D EF G A B!R,"
 freqs = (
@@ -105,7 +106,7 @@ def _parse(seq):
     i = 0
     lseq=len(seq)
     octave = 48
-    wholenote = (240 * intrate) // 120 
+    wholenote = (240000) // 120 
     length = 4
     sharp = 0
     gap = 0
@@ -133,7 +134,7 @@ def _parse(seq):
         elif cmd == 'O': octave = (mod-1) * 12
         elif cmd == '<': octave -= 12
         elif cmd == '>': octave += 12
-        elif cmd == 'T': wholenote = (240 * intrate) // (mod or 1)
+        elif cmd == 'T': wholenote = (240000) // (mod or 1)
         elif cmd == 'L': length = mod
         elif cmd == 'M': gap = 0x2000 * mod
         elif cmd == 'V': duty = 0x2000 * mod
@@ -152,6 +153,8 @@ def _parse(seq):
             dot = 256
         cmd = nxt
     return bufin
+
+
 
 
 
@@ -210,10 +213,9 @@ Example:
 === TECHNICAL INTEGRATION NOTES ===
 
 Hardware setup:
-  - Call setup(pin, timerid, interruptrate) once at startup:
+  - Call setup(pin, timerid) once at startup:
       pin: GPIO pin number for PWM output
       timerid: ID of hardware timer to use for interrupts
-      interruptrate: HZ of interrupts, defaults to 120 which is fine
 
 Playing music:
   - play(seq): Starts playing the given music string.
@@ -222,7 +224,7 @@ Playing music:
   - isplaying(): returns 1 if music is playing, 0 if not
 
 Interrupts:
-  - Uses a hardware timer running at 120 Hz (or whatever you pass in)
+  - Uses a periodic hardware timer for note start/stop 
   - Handler is implemented in Viper mode for speed.
   - Interrupts shut off when not needed
 
