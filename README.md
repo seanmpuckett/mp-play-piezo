@@ -59,7 +59,6 @@ setup(pin, timerid, interruptrate=120)
 ```
 - `pin`: GPIO pin number for PWM output  
 - `timerid`: ID of hardware timer to use for interrupts  
-- `interruptrate`: Interrupt frequency in Hz (default: 120 Hz)
 
 ### Playing Music
 - `play(seq)`: Starts playing the given music string. Returns immediately; playback occurs in the background via timer interrupt.  
@@ -67,7 +66,7 @@ setup(pin, timerid, interruptrate=120)
 - `isplaying()`: Returns `1` if music is playing, `0` if not.
 
 ### Interrupts
-- Uses a hardware timer running at 120 Hz (or your specified rate)  
+- Uses a periodic hardware timer for note start/stop  
 - Handler implemented in **Viper mode** for speed  
 - Interrupts are automatically disabled when not needed
 
