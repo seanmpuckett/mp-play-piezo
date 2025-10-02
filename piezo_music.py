@@ -1,20 +1,3 @@
-from constants import *
-
-THEME_CODE = "piezo"
-THEME_VERSION = 1
-THEME_NAME = "PiezoLib"
-
-from context import ctx
-
-class module:
-    code = THEME_CODE
-    version = THEME_VERSION
-    isa = ISA_LIBRARY
-
-def install():
-    if (p:=ctx.hw.get("piezo",-1)) < 0: return
-    setup(p,2)
-
 
 # piezo player library for micropython
 # 2025 Shea M Puckett
