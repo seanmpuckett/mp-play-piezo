@@ -100,22 +100,22 @@ freqs = (
 )
 
 
+
 def _parse(seq):
     buflen = len(buf_play) - 2
     seq = seq.upper()
     i = 0
     lseq=len(seq)
     octave = 48
-    wholenote = (240000) // 120 
+    wholenote = 2000 # milliseconds in a whole note at 120 bpm
     length = 4
-    sharp = 0
-    gap = 0
+    sharp = gap = 0
     dot = 256
     duty = 0xE000
     bufin = DATA_START
     lfreqs = len(freqs)
+    nxt = loopstart = loopcount = 0
     cmd = seq[0]
-    nxt = 0
     while i < lseq:
         i += 1
         mod = 0
@@ -138,11 +138,22 @@ def _parse(seq):
         elif cmd == 'L': length = mod
         elif cmd == 'M': gap = 0x2000 * mod
         elif cmd == 'V': duty = 0x2000 * mod
+        elif cmd == 'S': 
+            octave += mod if sharp >= 0 else -mod
+            sharp = 0
+        elif cmd == '[': 
+            loopstart = i
+            loopcount = mod or 1
+        elif cmd == ']':
+            if loopcount > 0: 
+                i = loopstart
+                nxt = seq[i]
+                loopcount -= 1
         else:
             note = notes.find(cmd)
             if note < 0: print("unknown music play command:",cmd); return 0
             freq = freqs[(note + octave + sharp) % lfreqs] if note < 12 else 1 if note == 12 else 0
-            on = ((wholenote * dot) >> 8) // ((mod or length) or 1) 
+            on = ((wholenote * dot) >> 8) // (mod or length or 1) 
             buf_play[bufin] = freq | duty
             buf_play[bufin + 1] = on | gap
             bufin += 2
@@ -153,8 +164,6 @@ def _parse(seq):
             dot = 256
         cmd = nxt
     return bufin
-
-
 
 
 
@@ -195,7 +204,13 @@ Octave control:
   O<number>       - Set octave (1-8); e.g., O4
   <               - Decrease octave by 1
   >               - Increase octave by 1
+  S<number>       - Transpose by semitones -96 to 96 (cumulative)
 
+Looping:
+  [<number>       - Start of loop segment. If no number, loops once
+  ]               - End of loop segment.  No nested loops. 
+                    Transposition and octave changes "stack" within loops
+  
 Tempo & timing:
   T<number>       - Set tempo in BPM (beats per minute); e.g., T120
   L<number>       - Set default note length (1=whole, 2=half, 4=quarter, etc.)
