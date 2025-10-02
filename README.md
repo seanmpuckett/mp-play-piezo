@@ -31,6 +31,12 @@ Music sequences are defined as strings with the following commands:
 - `O<number>` – Set octave (1–8); e.g., `O4`  
 - `<` – Decrease octave by 1  
 - `>` – Increase octave by 1
+- `S<number>` – Transpose by semitones -96 to 96 (cumulative)
+
+### Looping
+- `[<number>` - Start of loop segment. If no number, loops once
+- `]` - End of loop segment.  No nested loops.
+- Transposition and octave changes "stack" within loops
 
 ### Tempo & Timing
 - `T<number>` – Set tempo in BPM (beats per minute); e.g., `T120`  
